@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Testing Context Model Assessment</title>
+  <style>
+    :root {
+      --good: #2d8a4e;
+      --good-light: #e6f4ec;
+      --bad: #c0392b;
+      --bad-light: #fdecea;
+      --neutral: #5a6a7a;
+      --neutral-light: #f0f3f6;
+      --accent: #1a4fa0;
+      --accent-light: #e8eef8;
+      --border: #d0d7e0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f7fa;
+      color: #1a2332;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--accent);
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.3rem; font-weight: 600; }
+    header p { font-size: 0.85rem; opacity: 0.8; }
+
+    .summary-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+
+    .summary-pill {
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .pill-good { background: var(--good); color: white; }
+    .pill-bad { background: var(--bad); color: white; }
+    .pill-neutral { background: rgba(255,255,255,0.3); color: white; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: calc(100vh - 60px);
+    }
+
+    /* ── Sidebar: model diagram ── */
+    .sidebar {
+      background: white;
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+    }
+
+    .sidebar h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--neutral);
+      margin-bottom: 0.25rem;
+    }
+
+    .model-diagram {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+    }
+
+    .model-diagram svg { width: 100%; height: 100%; }
+
+    /* ── Node nav buttons ── */
+    .node-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .node-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      text-align: left;
+      font-size: 0.875rem;
+      transition: all 0.15s;
+    }
+
+    .node-btn:hover { background: var(--neutral-light); }
+    .node-btn.active { border-color: var(--accent); background: var(--accent-light); color: var(--accent); font-weight: 600; }
+    .node-btn.assessed-good { border-left: 4px solid var(--good); }
+    .node-btn.assessed-bad  { border-left: 4px solid var(--bad); }
+    .node-btn.assessed-mixed { border-left: 4px solid #f0a500; }
+
+    .node-icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      width: 1.5rem;
+      text-align: center;
+    }
+
+    .node-label { flex: 1; line-height: 1.2; }
+
+    .node-score {
+      font-size: 0.75rem;
+      color: var(--neutral);
+    }
+
+    /* ── Main content ── */
+    .main {
+      padding: 2rem;
+      overflow-y: auto;
+    }
+
+    .welcome {
+      max-width: 680px;
+    }
+
+    .welcome h2 { font-size: 1.4rem; margin-bottom: 0.75rem; color: var(--accent); }
+    .welcome p { line-height: 1.6; color: #4a5568; margin-bottom: 1rem; }
+
+    .model-overview {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    .overview-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+    }
+
+    .overview-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+
+    .overview-card .oc-icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+    .overview-card .oc-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
+    .overview-card .oc-desc { font-size: 0.78rem; color: var(--neutral); line-height: 1.4; }
+
+    /* ── Node detail panel ── */
+    .node-panel {
+      max-width: 800px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .panel-icon { font-size: 2.5rem; }
+
+    .panel-title h2 { font-size: 1.5rem; color: var(--accent); }
+    .panel-title p  { color: var(--neutral); font-size: 0.9rem; margin-top: 0.25rem; line-height: 1.5; }
+
+    .givens-choices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .gc-box {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+
+    .gc-box h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--neutral);
+      margin-bottom: 0.6rem;
+    }
+
+    .gc-box ul {
+      list-style: none;
+      font-size: 0.85rem;
+      color: #374151;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .gc-box ul li::before { content: "• "; color: var(--accent); }
+
+    /* ── Assessment checklists ── */
+    .assessment-section {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .assessment-section h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .h3-good { color: var(--good); }
+    .h3-bad  { color: var(--bad); }
+
+    .checklist {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .check-item:hover { background: var(--neutral-light); }
+    .check-item.checked-good { background: var(--good-light); border-color: var(--good); }
+    .check-item.checked-bad  { background: var(--bad-light);  border-color: var(--bad); }
+
+    .check-item input[type=checkbox] {
+      margin-top: 0.1rem;
+      width: 1rem;
+      height: 1rem;
+      flex-shrink: 0;
+      accent-color: var(--good);
+      cursor: pointer;
+    }
+
+    .bad-check input[type=checkbox] { accent-color: var(--bad); }
+
+    .notes-area {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .notes-area h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--neutral);
+      margin-bottom: 0.75rem;
+    }
+
+    .notes-area textarea {
+      width: 100%;
+      min-height: 90px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.875rem;
+      font-family: inherit;
+      resize: vertical;
+      color: #1a2332;
+    }
+
+    .notes-area textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* ── Summary page ── */
+    .summary-page { max-width: 800px; }
+
+    .summary-page h2 { font-size: 1.4rem; color: var(--accent); margin-bottom: 1.5rem; }
+
+    .summary-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .summary-row {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+    }
+
+    .summary-row-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-row-header .sr-icon { font-size: 1.2rem; }
+    .summary-row-header .sr-name { font-weight: 600; font-size: 0.95rem; flex: 1; }
+
+    .score-bar {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      font-size: 0.8rem;
+    }
+
+    .score-bar .sb-good {
+      background: var(--good);
+      color: white;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+    }
+
+    .score-bar .sb-bad {
+      background: var(--bad);
+      color: white;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+    }
+
+    .score-bar .sb-zero { color: var(--neutral); }
+
+    .summary-notes {
+      font-size: 0.82rem;
+      color: var(--neutral);
+      margin-top: 0.4rem;
+      font-style: italic;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+
+    .summary-actions {
+      margin-top: 1.5rem;
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    button.btn-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.btn-secondary {
+      background: white;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 0.6rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.btn-primary:hover { opacity: 0.9; }
+    button.btn-secondary:hover { background: var(--accent-light); }
+
+    .tag-good { color: var(--good); font-weight: 600; }
+    .tag-bad  { color: var(--bad);  font-weight: 600; }
+
+    @media (max-width: 780px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; }
+      .givens-choices { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Testing Context Model Assessment</h1>
+    <p>Identify strengths and weaknesses across your testing context</p>
+  </div>
+  <div class="summary-bar" id="summaryBar">
+    <span style="opacity:0.7">Assessed:</span>
+    <span class="summary-pill pill-good" id="totalGood">0 good</span>
+    <span class="summary-pill pill-bad"  id="totalBad">0 bad</span>
+    <span class="summary-pill pill-neutral" id="totalNodes">0 / 6 areas</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <h2>Model areas</h2>
+    </div>
+    <nav class="node-nav" id="nodeNav"></nav>
+    <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border);">
+      <button class="btn-primary" style="width:100%" onclick="showSummary()">View Summary</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="mainContent"></main>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────
+//  DATA
+// ──────────────────────────────────────────────────────────
+const NODES = [
+  {
+    id: "mission",
+    icon: "🎯",
+    name: "Mission",
+    role: "Customer / User – Tester",
+    description: "The mission defines why testing exists in this context — the business goals, quality objectives, and stakeholder expectations that testing must serve. It answers: what are we really trying to achieve?",
+    givens: [
+      "Business goals and product strategy",
+      "Customer expectations and SLAs",
+      "Regulatory or compliance requirements",
+      "Market and competitive pressures",
+      "Risk tolerance of the organization"
+    ],
+    choices: [
+      "How testing goals are communicated and shared",
+      "Which quality dimensions are prioritized",
+      "How success of testing is measured",
+      "Alignment with product roadmap",
+      "Stakeholder engagement in quality decisions"
+    ],
+    good: [
+      "Testing mission is clearly defined and shared with the team",
+      "Quality goals are connected to business outcomes",
+      "Stakeholders (incl. customers) are involved in defining quality",
+      "Risk-based approach guides what gets tested",
+      "Testing adds visible value beyond bug-finding",
+      "Mission is revisited as product and context evolve",
+      "Customer feedback loops inform testing priorities"
+    ],
+    bad: [
+      "No clear mission — testing is done 'because we should'",
+      "Quality goals contradict each other or are never prioritized",
+      "Testing mission is decoupled from business goals",
+      "Success is measured only in coverage or test counts",
+      "Stakeholders are unaware of what testing covers",
+      "Mission never changes even as product changes dramatically",
+      "Customer issues consistently surprise the team"
+    ]
+  },
+  {
+    id: "requirements",
+    icon: "📋",
+    name: "Requirements",
+    role: "Designer – Tester",
+    description: "Requirements represent what the software must do — functional specs, user stories, acceptance criteria, and implicit expectations. Testability of requirements is a key concern here.",
+    givens: [
+      "Customer needs and use cases",
+      "Existing specifications and contracts",
+      "Industry standards and regulations",
+      "Legacy system constraints",
+      "External API / integration specs"
+    ],
+    choices: [
+      "How requirements are written and structured",
+      "Level of detail and testability built in",
+      "When testers get involved in requirements",
+      "How ambiguity is resolved and documented",
+      "Review and sign-off processes"
+    ],
+    good: [
+      "Requirements are testable — they have clear pass/fail criteria",
+      "Testers involved early in requirements refinement",
+      "Acceptance criteria written before implementation begins",
+      "Edge cases and error scenarios are specified",
+      "Requirements are versioned and traceable",
+      "Implicit requirements are surfaced and documented",
+      "Changes to requirements trigger re-assessment of tests"
+    ],
+    bad: [
+      "Requirements are vague, ambiguous, or missing",
+      "Testers first see requirements when code is ready",
+      "No acceptance criteria — done means 'developer thinks it works'",
+      "Happy-path only; error handling is undocumented",
+      "Requirements change without notifying testers",
+      "Conflicting requirements go unresolved",
+      "Test cases written to match code rather than requirements"
+    ]
+  },
+  {
+    id: "implementation",
+    icon: "⚙️",
+    name: "Implementation & Integration",
+    role: "Developer – Tester",
+    description: "The code, architecture, build pipeline, and integration points that make up what is being tested. Testability of the implementation — its structure, observability, and controllability — is central here.",
+    givens: [
+      "Chosen technology stack",
+      "Third-party libraries and dependencies",
+      "Legacy code and technical debt",
+      "Platform and infrastructure constraints",
+      "External services and APIs"
+    ],
+    choices: [
+      "Code design for testability (interfaces, seams)",
+      "Test automation architecture and strategy",
+      "CI/CD pipeline configuration",
+      "How integration points are managed and stubbed",
+      "Logging, monitoring, and observability"
+    ],
+    good: [
+      "Code is designed with testability in mind",
+      "Developers write and maintain automated tests",
+      "CI pipeline runs tests on every change",
+      "Integration points are mockable/stubbable where needed",
+      "Good logging makes failures easy to diagnose",
+      "Test feedback loop is fast (< few minutes for unit tests)",
+      "Refactoring doesn't routinely break existing tests"
+    ],
+    bad: [
+      "Tightly coupled code with no obvious test seams",
+      "Tests are an afterthought added at the end",
+      "CI pipeline is slow, flaky, or skipped under pressure",
+      "External dependencies make testing environment fragile",
+      "Failures produce cryptic errors with no useful context",
+      "Test suite takes hours — feedback is too slow to act on",
+      "Refactoring causes mass test breakage (brittle tests)"
+    ]
+  },
+  {
+    id: "process",
+    icon: "🔄",
+    name: "Test Process",
+    role: "Test Manager / Project Manager",
+    description: "The activities, methods, and workflows that constitute testing — how testing is planned, designed, executed, and reported. The central element connecting all others in the context model.",
+    givens: [
+      "Development methodology (agile, waterfall, etc.)",
+      "Project timeline and release schedule",
+      "Organizational process standards",
+      "Audit and compliance requirements",
+      "Tool and platform constraints"
+    ],
+    choices: [
+      "Test strategy and approach selection",
+      "Test design techniques used",
+      "How exploratory and scripted testing balance",
+      "Defect management and reporting practices",
+      "Test entry/exit criteria and sign-off"
+    ],
+    good: [
+      "Testing approach is conscious and documented",
+      "Mix of exploratory and scripted testing used appropriately",
+      "Test design is risk-informed and prioritized",
+      "Defects are tracked, triaged, and acted upon",
+      "Retrospectives improve the test process over time",
+      "Testing is integrated throughout the sprint/release cycle",
+      "Clear criteria for 'done' include test completion"
+    ],
+    bad: [
+      "No defined test strategy — 'we just test everything'",
+      "Only scripted testing; no room for exploration",
+      "Tests designed after code, missing real coverage",
+      "Bugs filed but never triaged or prioritized",
+      "The same mistakes recur with no process improvement",
+      "Testing is a bottleneck gate at the end of development",
+      "'Done' is declared before testing is complete"
+    ]
+  },
+  {
+    id: "team",
+    icon: "👥",
+    name: "Test Team",
+    role: "Testers",
+    description: "The people who do testing — their skills, collaboration patterns, roles, and team culture. Includes how testers interact with developers, managers, and customers.",
+    givens: [
+      "Available headcount and budget",
+      "Existing skill sets in the team",
+      "Organizational structure and reporting lines",
+      "Hiring constraints and market availability",
+      "Cultural norms of the organization"
+    ],
+    choices: [
+      "Team composition and role definition",
+      "Skill development and training investment",
+      "Collaboration models with developers",
+      "How knowledge is shared within the team",
+      "Autonomy given to testers"
+    ],
+    good: [
+      "Testers have strong domain knowledge",
+      "Testing skills (exploration, design, analysis) are developed",
+      "Team collaborates closely with developers — not siloed",
+      "Knowledge is shared, not hoarded by individuals",
+      "Testers have autonomy to raise and escalate quality concerns",
+      "Psychological safety to report uncomfortable findings",
+      "Continuous learning culture in the team"
+    ],
+    bad: [
+      "Testers don't understand the product domain",
+      "Testing is seen as low-skill execution work",
+      "Testers and developers are adversarial",
+      "Single point of knowledge — bus factor is 1",
+      "Testers are overruled and can't escalate quality risks",
+      "Findings are filtered before reaching stakeholders",
+      "No time or budget for skill development"
+    ]
+  },
+  {
+    id: "lab",
+    icon: "🧪",
+    name: "Test Lab",
+    role: "Testers",
+    description: "The tools, environments, data, and infrastructure used in testing — everything that enables or constrains the execution of tests.",
+    givens: [
+      "Available hardware and cloud budget",
+      "Licensed tools already in place",
+      "Production environment characteristics",
+      "Data availability and privacy regulations",
+      "Infrastructure provisioning lead times"
+    ],
+    choices: [
+      "Tool selection and configuration",
+      "Environment management strategy",
+      "Test data strategy and generation",
+      "Automation framework choices",
+      "Monitoring and observability setup"
+    ],
+    good: [
+      "Test environments closely mirror production",
+      "Environments can be spun up on demand",
+      "Test data is realistic, varied, and refreshed regularly",
+      "Tools are well-integrated into the development workflow",
+      "Environment issues are diagnosed and fixed quickly",
+      "Automation runs reliably — low flakiness",
+      "Data privacy is handled correctly in test environments"
+    ],
+    bad: [
+      "Test environments diverge significantly from production",
+      "Shared environments create contention and test interference",
+      "Test data is stale, synthetic-looking, or absent",
+      "Tools are poorly integrated — manual steps between them",
+      "Environments are perpetually broken, blocking testing",
+      "High test flakiness erodes trust in automation",
+      "Production data used in test environments (privacy risk)"
+    ]
+  }
+];
+
+// ──────────────────────────────────────────────────────────
+//  STATE
+// ──────────────────────────────────────────────────────────
+const state = {
+  currentView: "welcome",
+  checks: {},   // nodeId -> { good: Set<idx>, bad: Set<idx> }
+  notes: {},    // nodeId -> string
+};
+
+// init check state
+NODES.forEach(n => {
+  state.checks[n.id] = { good: new Set(), bad: new Set() };
+  state.notes[n.id] = "";
+});
+
+// ──────────────────────────────────────────────────────────
+//  RENDER HELPERS
+// ──────────────────────────────────────────────────────────
+function scoreFor(nodeId) {
+  const c = state.checks[nodeId];
+  return { good: c.good.size, bad: c.bad.size };
+}
+
+function assessedClass(nodeId) {
+  const { good, bad } = scoreFor(nodeId);
+  if (good === 0 && bad === 0) return "";
+  if (bad === 0) return "assessed-good";
+  if (good === 0) return "assessed-bad";
+  return "assessed-mixed";
+}
+
+function renderNav() {
+  const nav = document.getElementById("nodeNav");
+  nav.innerHTML = NODES.map(n => {
+    const { good, bad } = scoreFor(n.id);
+    const sc = (good + bad) > 0 ? `${good}✓ ${bad}✗` : "";
+    const ac = assessedClass(n.id);
+    const active = state.currentView === n.id ? " active" : "";
+    return `<button class="node-btn${active} ${ac}" onclick="showNode('${n.id}')">
+      <span class="node-icon">${n.icon}</span>
+      <span class="node-label">${n.name}</span>
+      <span class="node-score">${sc}</span>
+    </button>`;
+  }).join("");
+}
+
+function renderHeaderCounts() {
+  let totalGood = 0, totalBad = 0, assessed = 0;
+  NODES.forEach(n => {
+    const s = scoreFor(n.id);
+    totalGood += s.good;
+    totalBad  += s.bad;
+    if (s.good + s.bad > 0) assessed++;
+  });
+  document.getElementById("totalGood").textContent = `${totalGood} good`;
+  document.getElementById("totalBad").textContent  = `${totalBad} bad`;
+  document.getElementById("totalNodes").textContent = `${assessed} / ${NODES.length} areas`;
+}
+
+// ──────────────────────────────────────────────────────────
+//  VIEWS
+// ──────────────────────────────────────────────────────────
+function showWelcome() {
+  state.currentView = "welcome";
+  renderNav();
+  const cards = NODES.map(n => `
+    <div class="overview-card" onclick="showNode('${n.id}')">
+      <div class="oc-icon">${n.icon}</div>
+      <div class="oc-name">${n.name}</div>
+      <div class="oc-desc">${n.description.split(".")[0]}.</div>
+    </div>`).join("");
+  document.getElementById("mainContent").innerHTML = `
+    <div class="welcome">
+      <h2>Testing Context Model Assessment</h2>
+      <p>
+        The <strong>Testing Context Model</strong> (Kaner, Bach, Pettichord) describes the environment in which
+        testing takes place. It has six interconnected elements — together they shape what good testing looks like
+        and what challenges you face.
+      </p>
+      <p>
+        Select an area to assess its current state. For each element, check off the
+        <span class="tag-good">good signals</span> you observe and the
+        <span class="tag-bad">bad signals</span> (problems, risks, anti-patterns) you recognize.
+        Add notes for context. Use the <strong>Summary</strong> to see the full picture.
+      </p>
+      <div class="model-overview">${cards}</div>
+    </div>`;
+}
+
+function showNode(id) {
+  state.currentView = id;
+  const n = NODES.find(x => x.id === id);
+  renderNav();
+
+  const goodItems = n.good.map((text, i) => {
+    const checked = state.checks[id].good.has(i);
+    return `<label class="check-item ${checked ? "checked-good" : ""}">
+      <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleCheck('${id}','good',${i},this)" />
+      ${text}
+    </label>`;
+  }).join("");
+
+  const badItems = n.bad.map((text, i) => {
+    const checked = state.checks[id].bad.has(i);
+    return `<label class="check-item bad-check ${checked ? "checked-bad" : ""}">
+      <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleCheck('${id}','bad',${i},this)" />
+      ${text}
+    </label>`;
+  }).join("");
+
+  const givens = n.givens.map(g => `<li>${g}</li>`).join("");
+  const choices = n.choices.map(c => `<li>${c}</li>`).join("");
+
+  const { good, bad } = scoreFor(id);
+  const scoreText = (good + bad) > 0
+    ? `<span class="tag-good">${good} good</span> · <span class="tag-bad">${bad} bad</span>`
+    : `<span style="color:var(--neutral)">No items checked yet</span>`;
+
+  document.getElementById("mainContent").innerHTML = `
+    <div class="node-panel">
+      <div class="panel-header">
+        <div class="panel-icon">${n.icon}</div>
+        <div class="panel-title">
+          <h2>${n.name}</h2>
+          <p>${n.description}</p>
+          <p style="margin-top:0.5rem; font-size:0.8rem;"><strong>Role:</strong> ${n.role} &nbsp;|&nbsp; ${scoreText}</p>
+        </div>
+      </div>
+
+      <div class="givens-choices">
+        <div class="gc-box">
+          <h3>Givens (constraints)</h3>
+          <ul>${givens}</ul>
+        </div>
+        <div class="gc-box">
+          <h3>Choices (levers)</h3>
+          <ul>${choices}</ul>
+        </div>
+      </div>
+
+      <div class="assessment-section">
+        <h3 class="h3-good">✅ Good signals — check what you observe</h3>
+        <div class="checklist">${goodItems}</div>
+      </div>
+
+      <div class="assessment-section">
+        <h3 class="h3-bad">⚠️ Bad signals — check what you recognize</h3>
+        <div class="checklist">${badItems}</div>
+      </div>
+
+      <div class="notes-area">
+        <h3>Notes / observations</h3>
+        <textarea placeholder="Write your specific observations, examples, or context here…"
+          oninput="saveNote('${id}', this.value)">${state.notes[id]}</textarea>
+      </div>
+
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+        ${NODES.indexOf(n) < NODES.length - 1
+          ? `<button class="btn-primary" onclick="showNode('${NODES[NODES.indexOf(n)+1].id}')">Next: ${NODES[NODES.indexOf(n)+1].name} →</button>`
+          : `<button class="btn-primary" onclick="showSummary()">View Summary →</button>`}
+        <button class="btn-secondary" onclick="showWelcome()">← Overview</button>
+      </div>
+    </div>`;
+}
+
+function showSummary() {
+  state.currentView = "summary";
+  renderNav();
+
+  const rows = NODES.map(n => {
+    const { good, bad } = scoreFor(n.id);
+    const note = state.notes[n.id];
+    const goodScore = good > 0 ? `<span class="sb-good">${good} good</span>` : `<span class="sb-zero">0 good</span>`;
+    const badScore  = bad  > 0 ? `<span class="sb-bad">${bad} bad</span>`   : `<span class="sb-zero">0 bad</span>`;
+    const noteTxt = note.trim() ? `<div class="summary-notes">${escHtml(note.trim())}</div>` : "";
+
+    // Checked items
+    const goodList = [...state.checks[n.id].good].map(i =>
+      `<li style="color:var(--good); font-size:0.82rem; margin-bottom:0.2rem;">✓ ${escHtml(n.good[i])}</li>`).join("");
+    const badList  = [...state.checks[n.id].bad].map(i =>
+      `<li style="color:var(--bad);  font-size:0.82rem; margin-bottom:0.2rem;">✗ ${escHtml(n.bad[i])}</li>`).join("");
+
+    const detail = (goodList || badList)
+      ? `<ul style="list-style:none; margin-top:0.6rem; padding:0;">${goodList}${badList}</ul>`
+      : "";
+
+    return `<div class="summary-row">
+      <div class="summary-row-header">
+        <span class="sr-icon">${n.icon}</span>
+        <span class="sr-name">${n.name}</span>
+        <div class="score-bar">${goodScore}${badScore}</div>
+        <button class="btn-secondary" style="padding:0.2rem 0.6rem; font-size:0.78rem;" onclick="showNode('${n.id}')">Edit</button>
+      </div>
+      ${detail}
+      ${noteTxt}
+    </div>`;
+  }).join("");
+
+  let totalGood = 0, totalBad = 0;
+  NODES.forEach(n => { const s = scoreFor(n.id); totalGood += s.good; totalBad += s.bad; });
+
+  let insight = "";
+  if (totalGood + totalBad === 0) {
+    insight = "No areas assessed yet. Work through each model element to build your picture.";
+  } else if (totalBad === 0) {
+    insight = "All checked signals are positive — either things are going well, or the bad signals haven't been looked at yet.";
+  } else if (totalGood === 0) {
+    insight = "Only problems identified so far. Are there also things working well worth preserving?";
+  } else {
+    const ratio = totalGood / (totalGood + totalBad);
+    if (ratio > 0.7) insight = `Mostly positive signals (${totalGood} good vs ${totalBad} bad). Focus on the flagged problem areas.`;
+    else if (ratio < 0.4) insight = `More problems than strengths identified (${totalBad} bad vs ${totalGood} good). Significant challenges to address.`;
+    else insight = `Mixed picture: ${totalGood} strengths and ${totalBad} problems. Use this to prioritize improvements.`;
+  }
+
+  document.getElementById("mainContent").innerHTML = `
+    <div class="summary-page">
+      <h2>Assessment Summary</h2>
+      <div style="background:var(--accent-light); border:1px solid var(--accent); border-radius:10px; padding:1rem; margin-bottom:1.5rem; font-size:0.9rem; color:var(--accent);">
+        💡 ${insight}
+      </div>
+      <div class="summary-grid">${rows}</div>
+      <div class="summary-actions">
+        <button class="btn-primary" onclick="exportText()">Export as text</button>
+        <button class="btn-secondary" onclick="clearAll()">Clear all</button>
+      </div>
+    </div>`;
+}
+
+// ──────────────────────────────────────────────────────────
+//  ACTIONS
+// ──────────────────────────────────────────────────────────
+function toggleCheck(nodeId, kind, idx, el) {
+  const set = state.checks[nodeId][kind];
+  if (el.checked) set.add(idx); else set.delete(idx);
+  renderHeaderCounts();
+  renderNav();
+  // Update visual on the label
+  const label = el.closest(".check-item");
+  if (kind === "good") label.classList.toggle("checked-good", el.checked);
+  else                 label.classList.toggle("checked-bad",  el.checked);
+}
+
+function saveNote(nodeId, value) {
+  state.notes[nodeId] = value;
+}
+
+function clearAll() {
+  if (!confirm("Clear all assessments and notes?")) return;
+  NODES.forEach(n => {
+    state.checks[n.id] = { good: new Set(), bad: new Set() };
+    state.notes[n.id] = "";
+  });
+  renderHeaderCounts();
+  showSummary();
+}
+
+function exportText() {
+  let out = "TESTING CONTEXT MODEL ASSESSMENT\n";
+  out += `Date: ${new Date().toLocaleDateString()}\n`;
+  out += "=".repeat(50) + "\n\n";
+  NODES.forEach(n => {
+    const { good, bad } = scoreFor(n.id);
+    out += `## ${n.name.toUpperCase()}\n`;
+    out += `Score: ${good} good signals, ${bad} bad signals\n`;
+    if (state.checks[n.id].good.size) {
+      out += "\nGood signals observed:\n";
+      [...state.checks[n.id].good].forEach(i => out += `  ✓ ${n.good[i]}\n`);
+    }
+    if (state.checks[n.id].bad.size) {
+      out += "\nBad signals observed:\n";
+      [...state.checks[n.id].bad].forEach(i => out += `  ✗ ${n.bad[i]}\n`);
+    }
+    if (state.notes[n.id].trim()) {
+      out += `\nNotes: ${state.notes[n.id].trim()}\n`;
+    }
+    out += "\n";
+  });
+  const blob = new Blob([out], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `context-model-assessment-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ──────────────────────────────────────────────────────────
+//  INIT
+// ──────────────────────────────────────────────────────────
+renderHeaderCounts();
+showWelcome();
+</script>
+</body>
+</html>
